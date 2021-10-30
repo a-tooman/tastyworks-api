@@ -19,6 +19,8 @@ from tastyworks.tastyworks_api import tasty_session
 
 LOGGER = logging.getLogger(__name__)
 
+# test github
+
 def get_third_friday(d):
     s = date(d.year, d.month, 15)
     candidate = s + timedelta(days=(calendar.FRIDAY - s.weekday()) % 7)
