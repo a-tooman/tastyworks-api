@@ -79,28 +79,6 @@ async def getaccinfo(session: TastyAPISession):
     return
 
 
-def getrsi(_quotes, _obs=14):
-    """
-    Desc. calculate relative strength index
-    RSI = 100.0 – 100.0 / ( 1.0 + RS )
-    RS = Average Gain / Average Loss
-
-    Average Gain = [(previous Average Gain) x 13 + current Gain] / 14
-    Average Loss = [(previous Average Loss) x 13 + current Loss] / 14
-
-    current Gain = Sum of Gains over the past 14 periods
-    current Loss = Sum of Losses over the past 14 periods
-
-    current Average Gain = Sum of Gains over the past 14 periods / 14
-    current Average Loss = Sum of Losses over the past 14 periods / 14
-    """
-    return
-
-
-def updatersi(_quotearray, _quote):
-    _rsilen = 15
-    return np.append(_quotearray[1:_rsilen],_quote)
-
 class rsihandler(object):
     dplaces = 4
     def __init__(self, _prd=14):
@@ -113,22 +91,21 @@ class rsihandler(object):
         Desc. quotes will be length of self.prd
         """
         self.quotes = np.zeros(self.prd+2)
-        self.quotesdiff = np.zeros(self.prd+1)
         return self
-
-    def get(self):
-        return {'quotes':self.quotes} #, 'quotesdiff':self.quotesdiff}
 
     def update(self, _quote):
         """
         Desc. append quote to the end
         """
         #print(_quote)
-        #print(self.quotes[-1])
-        #print(self.quotes[-1]-_quote)
-        self.quotesdiff = np.append(self.quotesdiff[1:self.prd],self.quotes[-1]-_quote)
         self.quotes = np.append(self.quotes[1:self.prd+1],_quote)
         return
+
+    def get(self):
+        """
+        Desc. get the quotes
+        """
+        return {'quotes':self.quotes}
 
     def getrsi(self):
         """
@@ -192,7 +169,7 @@ class quotehandler(object):
 async def getquote(session:TastyAPISession, streamer:DataStreamer, _ticker="BTC/USD:CXTALP"):
     """
     Desc. display ticker quote
-    tickers. "BTC/USD:CXTALP" (bitcoin v usd), SPY (S&P500 mini), QQQ (NASDAQ100 mini)
+    tickers. "BTC/USD:CXTALP" (bitcoin v usd)
     """
     # get account details
     accounts = await TradingAccount.get_remote_accounts(session)
@@ -206,12 +183,11 @@ async def getquote(session:TastyAPISession, streamer:DataStreamer, _ticker="BTC/
     rsihdlr = rsihandler()
     #quotearray = np.zeros(15)
     async for item in streamer.listen():
-
+        print(item.data)
         quotehdlr.update(item.data[0])
         rsihdlr.update(quotehdlr.mid)
-        #quotearray = updatersi(quotearray, quotehdlr.mid)
-
         LOGGER.info([quotehdlr.get(),rsihdlr.get(),rsihdlr.getrsi()])
+        await asyncio.sleep(60)
     return
 
 
@@ -238,7 +214,29 @@ def main():
         loop.close()
 
 def testrsi():
+    x = np.array([71.539
+            ,35.569
+            ,70.640
+            ,54.795
+            ,63.000
+            ,59.209
+            ,65.770
+            ,96.909
+            ,13.128
+            ,44.021
+            ,68.936
+            ,28.722
+            ,90.329
+            ,80.685
+            ,4.816
+            ,21.833
+            ,35.138
+            ,73.793
+            ,68.737
+            ,86.659])
+    print(talib.RSI(x, timeperiod=14))
     return
 
 if __name__ == '__main__':
     main()
+    #testrsi()
