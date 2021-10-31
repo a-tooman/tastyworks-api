@@ -19,8 +19,6 @@ from tastyworks.tastyworks_api import tasty_session
 
 LOGGER = logging.getLogger(__name__)
 
-# test github
-
 def get_third_friday(d):
     s = date(d.year, d.month, 15)
     candidate = s + timedelta(days=(calendar.FRIDAY - s.weekday()) % 7)
@@ -70,14 +68,12 @@ def getoptchain():
     """
     return
 
-
 async def getaccinfo(session: TastyAPISession):
     # account details
     accounts = await TradingAccount.get_remote_accounts(session)
     acct = accounts[0]
     LOGGER.info('Accounts available: %s', accounts)
     return
-
 
 class rsihandler(object):
     dplaces = 4
@@ -112,6 +108,35 @@ class rsihandler(object):
         Desc. calculate relative strength index
         """
         return {'rsi':talib.RSI(self.quotes, timeperiod=self.prd)}
+
+class tradehandler(object):
+    dplaces = 4
+    def __init__(self):
+        self.set()
+        return
+
+    def set(self):
+        """
+        Desc. set quote
+        """
+        import math
+        self.sym = ""
+        self.last = 0.0
+        return
+
+    def get(self):
+        """
+        Desc. get quote
+        """
+        return {'last':self.last}
+
+    def update(self,_quote):
+        """
+        Desc. update quote
+        """
+        self.sym = _quote['eventSymbol']
+        self.last = _quote
+        return
 
 class quotehandler(object):
     dplaces = 4
@@ -165,7 +190,6 @@ class quotehandler(object):
             self.midrank = None
         return
 
-
 async def getquote(session:TastyAPISession, streamer:DataStreamer, _ticker="BTC/USD:CXTALP"):
     """
     Desc. display ticker quote
@@ -177,19 +201,21 @@ async def getquote(session:TastyAPISession, streamer:DataStreamer, _ticker="BTC/
     LOGGER.info('Accounts available: %s', accounts)
 
     # get quote details
-    sub_values = {"Quote":[_ticker]}
+    sub_values = {'Quote':[_ticker]}
+    #sub_values = {'Trade':[_ticker]}
     await streamer.add_data_sub(sub_values)
     quotehdlr = quotehandler()
+    tradehdlr = tradehandler()
     rsihdlr = rsihandler()
     #quotearray = np.zeros(15)
     async for item in streamer.listen():
         print(item.data)
-        quotehdlr.update(item.data[0])
-        rsihdlr.update(quotehdlr.mid)
-        LOGGER.info([quotehdlr.get(),rsihdlr.get(),rsihdlr.getrsi()])
-        await asyncio.sleep(60)
+        #tradehdlr.update(item.data[0])
+        #quotehdlr.update(item.data[0])
+        #rsihdlr.update(quotehdlr.mid)
+        #LOGGER.info([quotehdlr.get(),rsihdlr.get(),rsihdlr.getrsi()])
+        await asyncio.sleep(1)
     return
-
 
 def main():
     tasty_client = tasty_session.create_new_session(
@@ -207,36 +233,9 @@ def main():
         LOGGER.exception('Exception in main loop')
     finally:
         # find all futures/tasks still running and wait for them to finish
-        pending_tasks = [
-            task for task in asyncio.all_tasks() if not task.done()
-        ]
+        pending_tasks = [task for task in asyncio.all_tasks() if not task.done()]
         loop.run_until_complete(asyncio.gather(*pending_tasks))
         loop.close()
 
-def testrsi():
-    x = np.array([71.539
-            ,35.569
-            ,70.640
-            ,54.795
-            ,63.000
-            ,59.209
-            ,65.770
-            ,96.909
-            ,13.128
-            ,44.021
-            ,68.936
-            ,28.722
-            ,90.329
-            ,80.685
-            ,4.816
-            ,21.833
-            ,35.138
-            ,73.793
-            ,68.737
-            ,86.659])
-    print(talib.RSI(x, timeperiod=14))
-    return
-
 if __name__ == '__main__':
     main()
-    #testrsi()

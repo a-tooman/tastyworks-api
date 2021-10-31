@@ -33,7 +33,7 @@ class DataStreamer(object):
         await self.cometd_client.close()
 
     async def add_data_sub(self, values):
-        LOGGER.debug(f'Adding subscription: {values}')
+        LOGGER.info(f'Adding subscription: {values}')
         await self._send_msg(dxfeed.SUBSCRIPTION_CHANNEL, {'add': values})
 
     async def remove_data_sub(self, values):
@@ -47,11 +47,11 @@ class DataStreamer(object):
     async def _send_msg(self, channel, message):
         if not self.logged_in:
             raise Exception('Connection not made or logged in')
-        LOGGER.debug('[dxFeed] sending: %s on channel: %s', message, channel)
+        LOGGER.info('[dxFeed] sending: %s on channel: %s', message, channel)
         await self.cometd_client.publish(channel, message)
 
     async def reset_data_subs(self):
-        LOGGER.debug('Resetting data subscriptions')
+        LOGGER.info('Resetting data subscriptions')
         await self._send_msg(dxfeed.SUBSCRIPTION_CHANNEL, {'reset': True})
 
     def get_streamer_token(self):
@@ -99,7 +99,7 @@ class DataStreamer(object):
 
     async def listen(self):
         async for msg in self.cometd_client:
-            LOGGER.debug('[dxFeed] received: %s', msg)
+            LOGGER.info('[dxFeed] received: %s', msg)
             if msg['channel'] != dxfeed.DATA_CHANNEL:
                 continue
             yield await self._consumer(msg['data'])
