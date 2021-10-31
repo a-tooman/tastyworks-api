@@ -6,11 +6,11 @@ from datetime import date, timedelta
 from decimal import Decimal, getcontext
 from collections import deque
 import numpy as np
+import talib
 
 from tastyworks.models import option_chain, underlying
 from tastyworks.models.option import Option, OptionType
-from tastyworks.models.order import (Order, OrderDetails, OrderPriceEffect,
-                                     OrderType)
+from tastyworks.models.order import (Order, OrderDetails, OrderPriceEffect, OrderType)
 from tastyworks.models.session import TastyAPISession
 from tastyworks.models.trading_account import TradingAccount
 from tastyworks.models.underlying import UnderlyingType
@@ -34,8 +34,8 @@ def get_third_friday(d):
     return candidate
 
 def getoptchain():
-    _ticker = 'QQQ'
-    #_ticker = '/ESM1 (EW3)'
+    #_ticker = 'QQQ'
+    _ticker = '/ESZ1'
     _strike = 400.0
     _price = 0.0
     """
@@ -102,43 +102,39 @@ def updatersi(_quotearray, _quote):
     return np.append(_quotearray[1:_rsilen],_quote)
 
 class rsihandler(object):
+    dplaces = 4
     def __init__(self, _prd=14):
         self.prd = _prd
         self.set()
         return
 
     def set(self):
-        self.quotes = np.zeros(self.prd+1)
-        self.quotesdiff = np.zeros(self.prd)
+        """
+        Desc. quotes will be length of self.prd
+        """
+        self.quotes = np.zeros(self.prd+2)
+        self.quotesdiff = np.zeros(self.prd+1)
         return self
 
     def get(self):
-        return {'quotes':self.quotes, 'quotesdiff':self.quotesdiff}
+        return {'quotes':self.quotes} #, 'quotesdiff':self.quotesdiff}
 
     def update(self, _quote):
-        print(_quote)
-        print(self.quotes[-1])
-        print(self.quotes[-1]-_quote)
-        self.quotesdiff = np.append(self.quotesdiff[1:self.prd-1],self.quotes[-1]-_quote)
-        self.quotes = np.append(self.quotes[1:self.prd],_quote)
+        """
+        Desc. append quote to the end
+        """
+        #print(_quote)
+        #print(self.quotes[-1])
+        #print(self.quotes[-1]-_quote)
+        self.quotesdiff = np.append(self.quotesdiff[1:self.prd],self.quotes[-1]-_quote)
+        self.quotes = np.append(self.quotes[1:self.prd+1],_quote)
         return
 
-    def getrsi():
+    def getrsi(self):
         """
         Desc. calculate relative strength index
-        RSI = 100.0 – 100.0 / ( 1.0 + RS )
-        RS = Average Gain / Average Loss
-
-        Average Gain = [(previous Average Gain) x 13 + current Gain] / 14
-        Average Loss = [(previous Average Loss) x 13 + current Loss] / 14
-
-        current Gain = Sum of Gains over the past 14 periods
-        current Loss = Sum of Losses over the past 14 periods
-
-        current Average Gain = Sum of Gains over the past 14 periods / 14
-        current Average Loss = Sum of Losses over the past 14 periods / 14
         """
-        return
+        return {'rsi':talib.RSI(self.quotes, timeperiod=self.prd)}
 
 class quotehandler(object):
     dplaces = 4
@@ -163,13 +159,15 @@ class quotehandler(object):
         return
 
     def get(self):
+        """
+        Desc. get quote
+        """
         return {'mid':self.mid, 'midrank':self.midrank, 'bid/ask':self.ratio}
 
     def update(self,_quote):
         """
         Desc. update quote
         """
-
         self.sym = _quote['eventSymbol']
 
         bsize = _quote['bidSize']
@@ -191,10 +189,10 @@ class quotehandler(object):
         return
 
 
-async def getquote(session:TastyAPISession, streamer:DataStreamer, _ticker="/ESM21:XCME"): #"/ESM21:XCME"
+async def getquote(session:TastyAPISession, streamer:DataStreamer, _ticker="BTC/USD:CXTALP"):
     """
     Desc. display ticker quote
-    tickers. /ESM21:XCME (current futures contract), SPY (S&P500 mini), QQQ (NASDAQ100 mini)
+    tickers. "BTC/USD:CXTALP" (bitcoin v usd), SPY (S&P500 mini), QQQ (NASDAQ100 mini)
     """
     # get account details
     accounts = await TradingAccount.get_remote_accounts(session)
@@ -203,22 +201,24 @@ async def getquote(session:TastyAPISession, streamer:DataStreamer, _ticker="/ESM
 
     # get quote details
     sub_values = {"Quote":[_ticker]}
-
     await streamer.add_data_sub(sub_values)
     quotehdlr = quotehandler()
     rsihdlr = rsihandler()
     #quotearray = np.zeros(15)
     async for item in streamer.listen():
+
         quotehdlr.update(item.data[0])
         rsihdlr.update(quotehdlr.mid)
         #quotearray = updatersi(quotearray, quotehdlr.mid)
 
-        LOGGER.info([quotehdlr.get(),rsihdlr.get()])
+        LOGGER.info([quotehdlr.get(),rsihdlr.get(),rsihdlr.getrsi()])
     return
 
 
 def main():
-    tasty_client = tasty_session.create_new_session(environ.get('TW_USER', ""), environ.get('TW_PASSWORD', ""))
+    tasty_client = tasty_session.create_new_session(
+        environ.get('TW_USER', "")
+        , environ.get('TW_PASSWORD', ""))
 
     streamer = DataStreamer(tasty_client)
     LOGGER.info('Streamer token: %s' % streamer.get_streamer_token())
@@ -237,6 +237,8 @@ def main():
         loop.run_until_complete(asyncio.gather(*pending_tasks))
         loop.close()
 
+def testrsi():
+    return
 
 if __name__ == '__main__':
     main()
