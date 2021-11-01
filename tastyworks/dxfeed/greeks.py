@@ -1,6 +1,5 @@
 from tastyworks.dxfeed.mapped_item import MappedItem
 
-
 class Greeks(MappedItem):
     DXFEED_TEXT = 'Greeks'
 

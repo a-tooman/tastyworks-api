@@ -1,6 +1,5 @@
 from tastyworks.dxfeed.mapped_item import MappedItem
 
-
 class Profile(MappedItem):
     DXFEED_TEXT = 'Profile'
 

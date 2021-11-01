@@ -12,7 +12,7 @@ def map_message(message):
     else:
         first_sample = True
     msg_type = message[0][0] if first_sample else message[0]
-
+    LOGGER.info(f'message type: %s', msg_type)
     if quote.Quote.DXFEED_TEXT == msg_type:
         res = quote.Quote(data=message)
     elif greeks.Greeks.DXFEED_TEXT == msg_type:

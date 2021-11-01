@@ -10,10 +10,12 @@ import talib
 
 from tastyworks.models import option_chain, underlying
 from tastyworks.models.option import Option, OptionType
-from tastyworks.models.order import (Order, OrderDetails, OrderPriceEffect, OrderType)
+from tastyworks.models.order import Order, OrderDetails, OrderPriceEffect, OrderType
 from tastyworks.models.session import TastyAPISession
 from tastyworks.models.trading_account import TradingAccount
 from tastyworks.models.underlying import UnderlyingType
+
+#from tastyworks.streamer import DataStreamer
 from tastyworks.streamer import DataStreamer
 from tastyworks.tastyworks_api import tasty_session
 
@@ -190,26 +192,31 @@ class quotehandler(object):
             self.midrank = None
         return
 
-async def getquote(session:TastyAPISession, streamer:DataStreamer, _ticker="BTC/USD:CXTALP"):
+#async def getquote(session:TastyAPISession, streamer:DataStreamer, _ticker="QQQ")
+async def getquote(session, streamer, _ticker="BTC/USD:CXTALP"): #"BTC/USD:CXTALP"
     """
     Desc. display ticker quote
     tickers. "BTC/USD:CXTALP" (bitcoin v usd)
     """
     # get account details
     accounts = await TradingAccount.get_remote_accounts(session)
-    acct = accounts[0]
+    #acct = accounts[0]
     LOGGER.info('Accounts available: %s', accounts)
 
     # get quote details
-    sub_values = {'Quote':[_ticker]}
-    #sub_values = {'Trade':[_ticker]}
+    await streamer.reset_data_subs()
+
+    sub_values = {'Trade':[_ticker]}
     await streamer.add_data_sub(sub_values)
+    # await streamer.add_data_sub(sub_values)
+
+    # get handlers
     quotehdlr = quotehandler()
     tradehdlr = tradehandler()
     rsihdlr = rsihandler()
-    #quotearray = np.zeros(15)
+
     async for item in streamer.listen():
-        print(item.data)
+        LOGGER.info(item.data[0])
         #tradehdlr.update(item.data[0])
         #quotehdlr.update(item.data[0])
         #rsihdlr.update(quotehdlr.mid)
@@ -218,6 +225,9 @@ async def getquote(session:TastyAPISession, streamer:DataStreamer, _ticker="BTC/
     return
 
 def main():
+    """
+    desc: initialize a session
+    """
     tasty_client = tasty_session.create_new_session(
         environ.get('TW_USER', "")
         , environ.get('TW_PASSWORD', ""))

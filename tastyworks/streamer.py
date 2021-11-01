@@ -12,7 +12,6 @@ from tastyworks.models.session import TastyAPISession
 
 LOGGER = logging.getLogger(__name__)
 
-
 class DataStreamer(object):
     def __init__(self, session: TastyAPISession):
         if not session.is_active():
