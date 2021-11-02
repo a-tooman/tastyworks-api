@@ -2,7 +2,7 @@ import asyncio
 import calendar
 import logging
 from os import environ
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, getcontext
 from collections import deque
 import numpy as np
@@ -15,7 +15,6 @@ from tastyworks.models.session import TastyAPISession
 from tastyworks.models.trading_account import TradingAccount
 from tastyworks.models.underlying import UnderlyingType
 
-#from tastyworks.streamer import DataStreamer
 from tastyworks.streamer import DataStreamer
 from tastyworks.tastyworks_api import tasty_session
 
@@ -89,13 +88,12 @@ class rsihandler(object):
         Desc. quotes will be length of self.prd
         """
         self.quotes = np.zeros(self.prd+2)
-        return self
+        return
 
     def update(self, _quote):
         """
         Desc. append quote to the end
         """
-        #print(_quote)
         self.quotes = np.append(self.quotes[1:self.prd+1],_quote)
         return
 
@@ -113,31 +111,41 @@ class rsihandler(object):
 
 class tradehandler(object):
     dplaces = 4
-    def __init__(self):
+    def __init__(self, _keep=10*60, _tdelta=5):
+        self.keep = _keep
+        self.tdelta = timedelta(seconds=_tdelta)
         self.set()
         return
 
     def set(self):
         """
-        Desc. set quote
+        Desc. set trade
         """
         import math
         self.sym = ""
-        self.last = 0.0
+        self.price = 0.0
+        self.prices = np.zeros(self.keep+1)
+        self.pricessize = 0
+        self.tlast = datetime.now()
         return
 
     def get(self):
         """
-        Desc. get quote
+        Desc. get prices
         """
-        return {'last':self.last}
+        return {'sym':self.sym,'prices':self.prices[-1], 'pricessize':self.pricessize, 'timedelta':self.tdelta}
 
     def update(self,_quote):
         """
-        Desc. update quote
+        Desc. update trade
         """
-        self.sym = _quote['eventSymbol']
-        self.last = _quote
+        if (_quote['time'] - self.tlast) > self.tdelta:
+            self.tlast = _quote['time']
+            self.sym = _quote['eventSymbol']
+            self.price = _quote['price']
+            self.change = _quote['change']
+            self.prices = np.append(self.prices[1:self.keep],self.price)
+            self.pricessize = min(self.keep,self.pricessize+1)
         return
 
 class quotehandler(object):
@@ -192,7 +200,6 @@ class quotehandler(object):
             self.midrank = None
         return
 
-#async def getquote(session:TastyAPISession, streamer:DataStreamer, _ticker="QQQ")
 async def getquote(session, streamer, _ticker="BTC/USD:CXTALP"): #"BTC/USD:CXTALP"
     """
     Desc. display ticker quote
@@ -200,28 +207,29 @@ async def getquote(session, streamer, _ticker="BTC/USD:CXTALP"): #"BTC/USD:CXTAL
     """
     # get account details
     accounts = await TradingAccount.get_remote_accounts(session)
+
     #acct = accounts[0]
     LOGGER.info('Accounts available: %s', accounts)
 
-    # get quote details
+    # reset data subscriptions
     await streamer.reset_data_subs()
 
+    # get and handle trades
     sub_values = {'Trade':[_ticker]}
     await streamer.add_data_sub(sub_values)
-    # await streamer.add_data_sub(sub_values)
-
-    # get handlers
-    quotehdlr = quotehandler()
     tradehdlr = tradehandler()
-    rsihdlr = rsihandler()
+
+    # get handle quotes
+    #sub_values = {'Quote':[_ticker]}
+    #await streamer.add_data_sub(sub_values)
+    #quotehdlr = quotehandler()
+
+    #rsihdlr = rsihandler()
 
     async for item in streamer.listen():
-        LOGGER.info(item.data[0])
-        #tradehdlr.update(item.data[0])
-        #quotehdlr.update(item.data[0])
-        #rsihdlr.update(quotehdlr.mid)
-        #LOGGER.info([quotehdlr.get(),rsihdlr.get(),rsihdlr.getrsi()])
-        await asyncio.sleep(1)
+        #LOGGER.info(item.data[0])
+        tradehdlr.update(item.data[0])
+        LOGGER.info(tradehdlr.get())
     return
 
 def main():

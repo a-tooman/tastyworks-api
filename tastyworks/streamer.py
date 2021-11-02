@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import logging
+import time
 
 import aiocometd
 import requests
@@ -98,11 +99,10 @@ class DataStreamer(object):
 
     async def listen(self):
         async for msg in self.cometd_client:
-            LOGGER.info('[dxFeed] received: %s', msg)
+            LOGGER.debug('[dxFeed] received: %s', msg)
             if msg['channel'] != dxfeed.DATA_CHANNEL:
                 continue
             yield await self._consumer(msg['data'])
-
 
 class AuthExtension(aiocometd.AuthExtension):
     def __init__(self, streamer_token: str):

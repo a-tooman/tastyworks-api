@@ -9,7 +9,7 @@ class Quote(MappedItem):
         for key in ('askTime', 'bidTime'):
             data_dict[key] = datetime.datetime.fromtimestamp(data_dict[key] / 1000)
 
-        data_dict['eventTime'] = datetime.datetime.fromtimestamp(data_dict['eventTime'] / 1000_000_000)
+        data_dict['eventTime'] = datetime.datetime.fromtimestamp(data_dict['eventTime'] / 1000)
         return data_dict
 
     def __init__(self, data=None):
