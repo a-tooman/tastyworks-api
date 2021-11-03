@@ -1,10 +1,13 @@
 import asyncio
+import copy
 import calendar
 import logging
 from os import environ
 from datetime import date, datetime, timedelta
 from decimal import Decimal, getcontext
 from collections import deque
+from math import exp
+
 import numpy as np
 import talib
 
@@ -97,56 +100,108 @@ class rsihandler(object):
         self.quotes = np.append(self.quotes[1:self.prd+1],_quote)
         return
 
-    def get(self):
-        """
-        Desc. get the quotes
-        """
-        return {'quotes':self.quotes}
-
-    def getrsi(self):
+    def getrsi(self, _obs):
         """
         Desc. calculate relative strength index
         """
-        return {'rsi':talib.RSI(self.quotes, timeperiod=self.prd)}
+        return {'rsi':talib.RSI(_obs, timeperiod=self.prd)}
 
 class tradehandler(object):
+    """
+    Desc. handles a trade subscription
+    sym = instrument symbol.
+    tdel = time delta (seconds).
+    tobs = time of observations (seconds).
+    iobs = indicator observations.
+    obs = (iobs+1)*(tobs/tdel)
+    """
     dplaces = 4
-    def __init__(self, _keep=10*60, _tdelta=5):
-        self.keep = _keep
-        self.tdelta = timedelta(seconds=_tdelta)
+    def __init__(self, _sym="BTC/USD:CXTALP", _tdel=10, _tobs=1*60, _iobs=14+1):
+        self.sym = _sym
+        self.tdel = _tdel
+        self.tobs = _tobs
+        self.iobs = _iobs
+        self.obs = int((self.tobs)*(self.tobs/self.tdel))
         self.set()
         return
 
     def set(self):
         """
         Desc. set trade
+        OHLC: prcsopen, prcshigh, prcslow, prcsclose
         """
-        import math
-        self.sym = ""
-        self.price = 0.0
-        self.prices = np.zeros(self.keep+1)
-        self.pricessize = 0
-        self.tlast = datetime.now()
+        self.prcsize = 0
+        self.count = 0
+        # ohlc
+        self.prcopen = 0.0
+        self.prchigh = 0.0
+        self.prclow = pow(10,6)
+
+        self.prcsopen = deque(maxlen=self.obs+1)
+        self.prcshigh = deque(maxlen=self.obs+1)
+        self.prcslow = deque(maxlen=self.obs+1)
+        self.prcsclose = deque(maxlen=self.obs+1)
+
+        self.prct = deque(maxlen=self.obs+1)
+        self.tnext = datetime.now() + timedelta(seconds=self.tdel)
+        self.tnext.replace(microsecond=0)
         return
 
     def get(self):
         """
+        Desc. get trades
+        """
+        if self.prcsize < 1:
+            return {'sym':self.sym, 'prcsize':self.prcsize,'prc':self.prcclose}
+        else:
+            return {'sym':self.sym
+                , 'count':self.count
+                , 'prcsize':self.prcsize
+                , 'prcs':np.vstack(
+                    [np.array(self.prct)[-self.prcsize:]
+                    ,np.array(self.prcsopen)[-self.prcsize:]
+                    ,np.array(self.prcshigh)[-self.prcsize:]
+                    ,np.array(self.prcslow)[-self.prcsize:]
+                    ,np.array(self.prcsclose)[-self.prcsize:]]).T
+                }
+
+    def getclose(self):
+        """
         Desc. get prices
         """
-        return {'sym':self.sym,'prices':self.prices[-1], 'pricessize':self.pricessize, 'timedelta':self.tdelta}
+        return np.append(self.prcs[1:self.obs],self.prc/self.prccount)
 
-    def update(self,_quote):
+    def update(self,_trade):
         """
-        Desc. update trade
+        Desc. update OHLC
         """
-        if (_quote['time'] - self.tlast) > self.tdelta:
-            self.tlast = _quote['time']
-            self.sym = _quote['eventSymbol']
-            self.price = _quote['price']
-            self.change = _quote['change']
-            self.prices = np.append(self.prices[1:self.keep],self.price)
-            self.pricessize = min(self.keep,self.pricessize+1)
+        self.count+=1
+        self.prcclose = _trade['price']
+        if self.prchigh < _trade['price']: self.prchigh = _trade['price']
+        if _trade['price'] < self.prclow: self.prclow = _trade['price']
+        if _trade['time'] > self.tnext:
+            # append OHLC
+            self.prcsopen.append(self.prcopen)
+            self.prcshigh.append(self.prchigh)
+            self.prcslow.append(self.prclow)
+            self.prcsclose.append(self.prcclose)
+
+            self.prcopen = _trade['price']
+            self.prchigh = 0.0
+            self.prclow = pow(10,6)
+            # append time
+            self.prct.append(self.tnext)
+            self.prcsize = min(self.obs,self.prcsize+1)
+            self.tnext = self.tnext + timedelta(seconds=self.tdel)
+            self.tnext.replace(microsecond=0)
+            self.count=0
         return
+
+    def getslicer(self, _iobs):
+        """
+        Desc. get the slice for rsi
+        """
+        return np.linspace(start=self.obs-self.prcesize, stop=self.obs, num=_iobs+1, dtype=int)
 
 class quotehandler(object):
     dplaces = 4
@@ -218,13 +273,7 @@ async def getquote(session, streamer, _ticker="BTC/USD:CXTALP"): #"BTC/USD:CXTAL
     sub_values = {'Trade':[_ticker]}
     await streamer.add_data_sub(sub_values)
     tradehdlr = tradehandler()
-
-    # get handle quotes
-    #sub_values = {'Quote':[_ticker]}
-    #await streamer.add_data_sub(sub_values)
-    #quotehdlr = quotehandler()
-
-    #rsihdlr = rsihandler()
+    rsihdlr = rsihandler()
 
     async for item in streamer.listen():
         #LOGGER.info(item.data[0])
@@ -255,5 +304,50 @@ def main():
         loop.run_until_complete(asyncio.gather(*pending_tasks))
         loop.close()
 
+def testdt():
+    _obs = np.array([63173.2065942, 63165.60865079, 63139.27961538,
+               63124.31290323, 63131.55138462, 63122.32398437,
+               63104.58233871, 63138.50757813, 63139.05274194,
+               63146.16126984, 63134.81223077, 63137.99401515,
+               63173.2065942 , 63165.60865079, 63139.27961538,
+               63124.31290323, 63131.55138462, 63122.32398437,
+               63104.58233871, 63138.50757813, 63139.05274194,
+               63146.16126984, 63134.81223077, 63137.99401515,
+               63173.2065942 , 63165.60865079, 63139.27961538,
+               63124.31290323, 63131.55138462, 63122.32398437,
+               63104.58233871, 63138.50757813, 63139.05274194,
+               63146.16126984, 63134.81223077, 63137.99401515,
+               63127.88171642, 63103.0808871 , 63138.74286885,
+               63138.74286885, 63103.0808871, 63173.2065942,
+               63165.60865079], dtype=float)
+
+    prcesize = 42
+    print(prcesize)
+    tobs = int(3*60)
+    tdel = int(1*60)
+    iobs = int(14)
+    obs = iobs*tobs/tdel
+    steps = int(prcesize/iobs)
+    print(steps)
+    start = obs+1-steps*iobs
+    print(obs)
+
+    lin = np.linspace(start=obs-prcesize, stop=obs, num=iobs+1, dtype=int)
+    print(lin)
+    print(_obs[lin])
+    """
+    obs=1*60*(14+1)
+    prct = np.ndarray(shape=(obs,), dtype=datetime)
+    print(prct)
+    print(prct.shape)
+
+    prct = np.append(prct[1:obs],[dt], axis=0)
+    print(prct)
+    print(prct.shape)
+    """
+
 if __name__ == '__main__':
-    main()
+    #main()
+    #testnp()
+    #testdeque()
+    testdt()
