@@ -116,12 +116,12 @@ class tradehandler(object):
     obs = (iobs+1)*(tobs/tdel)
     """
     dplaces = 4
-    def __init__(self, _sym="BTC/USD:CXTALP", _tdel=10, _tobs=1*60, _iobs=14+1):
+    def __init__(self, _sym="BTC/USD:CXTALP", _tdel=1, _tobs=1*60, _iobs=14):
         self.sym = _sym
         self.tdel = _tdel
         self.tobs = _tobs
         self.iobs = _iobs
-        self.obs = int((self.tobs)*(self.tobs/self.tdel))
+        self.obs = int(self.iobs*(self.tobs/self.tdel))
         self.set()
         return
 
@@ -151,19 +151,21 @@ class tradehandler(object):
         """
         Desc. get trades
         """
-        if self.prcsize < 1:
-            return {'sym':self.sym, 'prcsize':self.prcsize,'prc':self.prcclose}
-        else:
+        if self.prcsize > self.iobs:
+            """
+            Desc.
+            np.vstack(
+                [np.array(self.prct)[-self.prcsize:]
+                ,np.array(self.prcsclose)[-self.prcsize:]]).T
+            """
             return {'sym':self.sym
                 , 'count':self.count
                 , 'prcsize':self.prcsize
-                , 'prcs':np.vstack(
-                    [np.array(self.prct)[-self.prcsize:]
-                    ,np.array(self.prcsopen)[-self.prcsize:]
-                    ,np.array(self.prcshigh)[-self.prcsize:]
-                    ,np.array(self.prcslow)[-self.prcsize:]
-                    ,np.array(self.prcsclose)[-self.prcsize:]]).T
+                , 'prcclose':self.prcclose
+                , 'rsi':talib.RSI(np.array(self.prcsclose, dtype=float)[self.slicer], timeperiod=self.iobs)
                 }
+        else:
+            return {'sym':self.sym, 'prcsize':self.prcsize,'prc':self.prcclose}
 
     def getclose(self):
         """
@@ -189,19 +191,24 @@ class tradehandler(object):
             self.prcopen = _trade['price']
             self.prchigh = 0.0
             self.prclow = pow(10,6)
+
             # append time
             self.prct.append(self.tnext)
             self.prcsize = min(self.obs,self.prcsize+1)
             self.tnext = self.tnext + timedelta(seconds=self.tdel)
             self.tnext.replace(microsecond=0)
             self.count=0
+
+            # set setslicer
+            if self.prcsize > self.iobs:self.setslicer()
         return
 
-    def getslicer(self, _iobs):
+    def setslicer(self):
         """
-        Desc. get the slice for rsi
+        Desc. get the slice for indicators
         """
-        return np.linspace(start=self.obs-self.prcesize, stop=self.obs, num=_iobs+1, dtype=int)
+        self.slicer = np.linspace(start=0, stop=self.prcsize-1, num=self.iobs+1, dtype=int)
+        return
 
 class quotehandler(object):
     dplaces = 4
@@ -321,33 +328,15 @@ def testdt():
                63138.74286885, 63103.0808871, 63173.2065942,
                63165.60865079], dtype=float)
 
-    prcesize = 42
+    prcesize = _obs.size
     print(prcesize)
-    tobs = int(3*60)
-    tdel = int(1*60)
-    iobs = int(14)
-    obs = iobs*tobs/tdel
-    steps = int(prcesize/iobs)
-    print(steps)
-    start = obs+1-steps*iobs
-    print(obs)
-
-    lin = np.linspace(start=obs-prcesize, stop=obs, num=iobs+1, dtype=int)
+    lin = np.linspace(start=0, stop=prcesize-1, num=14+1, dtype=int)
     print(lin)
     print(_obs[lin])
-    """
-    obs=1*60*(14+1)
-    prct = np.ndarray(shape=(obs,), dtype=datetime)
-    print(prct)
-    print(prct.shape)
-
-    prct = np.append(prct[1:obs],[dt], axis=0)
-    print(prct)
-    print(prct.shape)
-    """
+    return
 
 if __name__ == '__main__':
-    #main()
+    main()
     #testnp()
     #testdeque()
-    testdt()
+    #testdt()
